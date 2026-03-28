@@ -1,0 +1,32 @@
+[
+  {
+    "patient": { "name": "Robert Chen", "age": 65, "gender": "M", "contact": "robert.chen@email.com" },
+    "symptoms_raw": "My dad is 65, he's had severe chest pain for two hours now, radiating to his left arm, and he's having trouble breathing. He's sweating a lot.",
+    "expected_triage_score": 5,
+    "expected_timeframe": "Immediate / Emergency"
+  },
+  {
+    "patient": { "name": "Maria Santos", "age": 42, "gender": "F", "contact": "maria.s@email.com" },
+    "symptoms_raw": "I've had sharp abdominal pain on my lower right side since last night. It's getting worse, and I feel nauseous. I have a low fever of about 100.5F.",
+    "expected_triage_score": 4,
+    "expected_timeframe": "Within 2 hours"
+  },
+  {
+    "patient": { "name": "James Wilson", "age": 35, "gender": "M", "contact": "jwilson@email.com" },
+    "symptoms_raw": "I've been having persistent headaches for about a week, mostly behind my eyes. They get worse in the afternoon. I also feel more tired than usual and a bit dizzy sometimes.",
+    "expected_triage_score": 3,
+    "expected_timeframe": "Within 24 hours"
+  },
+  {
+    "patient": { "name": "Sarah Kim", "age": 28, "gender": "F", "contact": "sarah.kim@email.com" },
+    "symptoms_raw": "I've had a sore throat and mild cough for about 4 days. My voice is a bit hoarse. No fever, I can still eat and drink normally, just uncomfortable.",
+    "expected_triage_score": 2,
+    "expected_timeframe": "Within a few days"
+  },
+  {
+    "patient": { "name": "Tommy Liu", "age": 8, "gender": "M", "contact": "parent.liu@email.com" },
+    "symptoms_raw": "My kid is 8, he's had a runny nose for three days, sneezing a lot. But he's still energetic, eating fine, sleeping well, no fever. Just a regular cold I think.",
+    "expected_triage_score": 1,
+    "expected_timeframe": "Routine follow-up"
+  }
+]
