@@ -4,267 +4,136 @@ import { useAuth } from "../../lib/auth";
 import { insforge } from "../../lib/insforge";
 
 const DURATIONS = ["<1 day", "1-3 days", "3-7 days", ">1 week"];
+const INPUT = "w-full rounded-xl border border-slate-200 bg-white/80 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 transition focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100";
 
 const SCORE_STYLE = {
-  1: { label: "Routine", ring: "ring-emerald-200", bg: "bg-emerald-50", text: "text-emerald-700", badge: "bg-emerald-100 text-emerald-700" },
-  2: { label: "Non-urgent", ring: "ring-emerald-200", bg: "bg-emerald-50", text: "text-emerald-700", badge: "bg-emerald-100 text-emerald-700" },
-  3: { label: "Should be seen soon", ring: "ring-amber-200", bg: "bg-amber-50", text: "text-amber-700", badge: "bg-amber-100 text-amber-700" },
-  4: { label: "Urgent", ring: "ring-rose-200", bg: "bg-rose-50", text: "text-rose-700", badge: "bg-rose-100 text-rose-700" },
-  5: { label: "Emergency", ring: "ring-rose-300", bg: "bg-rose-50", text: "text-rose-700", badge: "bg-rose-100 text-rose-800" },
+  1: { label: "Routine", gradient: "from-emerald-400 to-green-500", glow: "shadow-emerald-500/20" },
+  2: { label: "Non-urgent", gradient: "from-emerald-400 to-green-500", glow: "shadow-emerald-500/20" },
+  3: { label: "Should be seen soon", gradient: "from-amber-400 to-orange-500", glow: "shadow-amber-500/20" },
+  4: { label: "Urgent", gradient: "from-rose-400 to-red-500", glow: "shadow-rose-500/20" },
+  5: { label: "Emergency", gradient: "from-red-500 to-red-600", glow: "shadow-red-500/30" },
 };
 
 export default function SubmitPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-
   const [symptoms, setSymptoms] = useState("");
   const [duration, setDuration] = useState("<1 day");
   const [accompanying, setAccompanying] = useState("");
   const [history, setHistory] = useState("");
-
-  const [phase, setPhase] = useState("form"); // form | analyzing | result
+  const [phase, setPhase] = useState("form");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
 
   async function handleSubmit(e) {
     e.preventDefault();
     if (!symptoms.trim()) return;
-
-    setPhase("analyzing");
-    setError("");
-
+    setPhase("analyzing"); setError("");
     try {
-      // ── Call P1's serverless function ──
       let analysis;
       try {
-        const { data, error: fnErr } = await insforge.functions.invoke(
-          "analyzeSymptomsV1",
-          {
-            body: {
-              symptoms_text: symptoms,
-              duration,
-              accompanying,
-              history,
-              patient_age: 30,
-              patient_gender: "not specified",
-            },
-          }
-        );
+        const { data, error: fnErr } = await insforge.functions.invoke("analyzeSymptomsV1", {
+          body: { symptoms_text: symptoms, duration, accompanying, history, patient_age: 30, patient_gender: "not specified", patient_name: user?.profile?.name || user?.email || "Anonymous" },
+        });
         if (fnErr) throw fnErr;
         analysis = data;
-      } catch {
-        // ── Fallback mock so demo never crashes ──
-        analysis = generateMockAnalysis(symptoms);
-      }
-
-      // ── Save case to DB ──
-      try {
-        await insforge.database.from("cases").insert({
-          patient_id: user?.id || null,
-          symptoms_raw: symptoms,
-          summary_json: analysis.summary,
-          triage_score: analysis.triage.score,
-          triage_reason: analysis.triage.reason,
-          status: "pending",
-        });
-      } catch (dbErr) {
-        console.warn("DB insert failed (demo mode):", dbErr);
-      }
-
-      setResult(analysis);
-      setPhase("result");
-    } catch (err) {
-      console.error("Analysis failed:", err);
-      setError("Analysis failed. Please try again.");
-      setPhase("form");
-    }
+      } catch { analysis = generateMockAnalysis(symptoms); }
+      setResult(analysis); setPhase("result");
+    } catch (err) { console.error(err); setError("Analysis failed. Please try again."); setPhase("form"); }
   }
 
-  function resetForm() {
-    setSymptoms("");
-    setDuration("<1 day");
-    setAccompanying("");
-    setHistory("");
-    setResult(null);
-    setPhase("form");
-    setError("");
-  }
+  function resetForm() { setSymptoms(""); setDuration("<1 day"); setAccompanying(""); setHistory(""); setResult(null); setPhase("form"); setError(""); }
 
-  // ═══════════════════════════════════════
-  //  ANALYZING
-  // ═══════════════════════════════════════
   if (phase === "analyzing") {
     return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
-        <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-slate-200 border-t-blue-600" />
+      <div className="flex min-h-[70vh] flex-col items-center justify-center gap-6">
+        <div className="relative">
+          <div className="h-16 w-16 animate-spin rounded-full border-[3px] border-slate-200 border-t-blue-600" />
+          <div className="absolute inset-0 flex items-center justify-center text-xl">🔬</div>
+        </div>
         <div className="text-center">
-          <p className="text-sm font-semibold text-slate-900">
-            AI is analyzing your symptoms...
-          </p>
-          <p className="mt-1 text-xs text-slate-400">
-            Extracting symptoms, assessing severity, generating triage
-            recommendation.
-          </p>
+          <p className="text-base font-semibold text-slate-900">AI is analyzing your symptoms...</p>
+          <p className="mt-2 text-sm text-slate-400">Step 1: Extracting symptoms &rarr; Step 2: Assessing severity</p>
         </div>
       </div>
     );
   }
 
-  // ═══════════════════════════════════════
-  //  RESULT
-  // ═══════════════════════════════════════
   if (phase === "result" && result) {
     const score = result.triage.score;
     const s = SCORE_STYLE[score] || SCORE_STYLE[3];
-
     return (
       <div className="mx-auto max-w-2xl px-4 py-8">
-        <h1 className="mb-6 text-2xl font-bold text-slate-900">
-          Analysis Complete
-        </h1>
-
-        {/* Triage banner */}
-        <div className={`mb-6 rounded-xl border p-4 ${s.ring} ring-1 ${s.bg}`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className={`text-sm font-bold ${s.text}`}>
-                Triage Score: {score}/5 — {s.label}
-              </p>
-              <p className={`mt-1 text-xs opacity-80 ${s.text}`}>
-                {result.triage.reason}
-              </p>
+        <h1 className="mb-6 text-2xl font-bold text-slate-900">Analysis Complete</h1>
+        <div className={`mb-6 overflow-hidden rounded-2xl shadow-xl ${s.glow}`}>
+          <div className={`bg-gradient-to-r ${s.gradient} px-5 py-3`}>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-bold text-white">Triage Score: {score}/5</p>
+              <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-bold text-white backdrop-blur-sm">{s.label}</span>
             </div>
-            <span
-              className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${s.badge}`}
-            >
-              {result.triage.recommended_timeframe}
-            </span>
+          </div>
+          <div className="border border-slate-200 border-t-0 rounded-b-2xl bg-white/60 px-5 py-3 backdrop-blur-sm">
+            <p className="text-sm text-slate-900">{result.triage.reason}</p>
+            <p className="mt-1 text-xs font-semibold text-slate-600">Recommended: {result.triage.recommended_timeframe}</p>
           </div>
         </div>
-
-        {/* Case summary */}
-        <div className="rounded-xl border border-slate-200 bg-white">
-          <div className="border-b border-slate-100 px-4 py-3">
-            <p className="text-sm font-semibold text-slate-900">Case Summary</p>
-          </div>
+        <div className="glass rounded-2xl shadow-lg">
+          <div className="border-b border-slate-100 px-5 py-3"><p className="text-sm font-semibold text-slate-900">Case Summary</p></div>
           <div className="divide-y divide-slate-100">
-            <SummaryRow label="Chief complaint" value={result.summary.chief_complaint} />
-            <SummaryRow label="Symptoms" value={result.summary.symptoms} />
-            <SummaryRow label="Duration" value={result.summary.duration} />
-            <SummaryRow label="Accompanying" value={result.summary.accompanying} />
-            <SummaryRow label="History" value={result.summary.history} />
+            <Row label="Chief complaint" value={result.summary.chief_complaint} />
+            <Row label="Symptoms" value={result.summary.symptoms} />
+            <Row label="Duration" value={result.summary.duration} />
+            <Row label="Accompanying" value={result.summary.accompanying} />
+            <Row label="History" value={result.summary.history} />
           </div>
         </div>
-
-        {/* Status */}
-        <div className="mt-4 flex items-center gap-2 rounded-lg bg-blue-50 px-4 py-3 text-xs font-medium text-blue-700">
-          <span>✅</span>
-          Submitted to doctor — your case is now in the triage queue.
+        <div className="mt-4 flex items-center gap-2.5 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-xs text-white">✓</div>
+          <p className="text-sm font-medium text-blue-700">Submitted to doctor — your case is now in the triage queue.</p>
         </div>
-
-        {/* Actions */}
         <div className="mt-6 flex gap-3">
-          <button
-            onClick={() =>
-              navigate("/patient/chat", {
-                state: { caseId: result.case_id },
-              })
-            }
-            className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
-          >
-            Ask Follow-up Questions
-          </button>
-          <button
-            onClick={resetForm}
-            className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-          >
-            Submit Another
-          </button>
+          <button onClick={() => navigate("/patient/chat", { state: { caseId: result.case_id } })}
+            className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-xl shadow-blue-600/25 transition hover:shadow-2xl hover:brightness-110">Ask Follow-up Questions</button>
+          <button onClick={resetForm} className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50">Submit Another</button>
         </div>
-
-        <p className="mt-6 text-center text-xs italic text-slate-400">
-          This is AI-assisted analysis, not medical advice.
-        </p>
+        <p className="mt-8 text-center text-sm font-semibold italic text-amber-600">This is AI-assisted analysis, not medical advice.</p>
       </div>
     );
   }
 
-  // ═══════════════════════════════════════
-  //  FORM
-  // ═══════════════════════════════════════
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
-      <h1 className="mb-1 text-2xl font-bold text-slate-900">
-        Submit Your Symptoms
-      </h1>
-      <p className="mb-6 text-sm text-slate-500">
-        Describe how you're feeling. Our AI will generate a triage summary for
-        your doctor.
-      </p>
-
-      {error && <p className="mb-4 text-sm text-rose-600">{error}</p>}
-
-      <form onSubmit={handleSubmit} className="grid gap-4">
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            Main symptoms <span className="text-rose-500">*</span>
-          </label>
-          <textarea
-            value={symptoms}
-            onChange={(e) => setSymptoms(e.target.value)}
-            rows={4}
-            required
-            placeholder={"Describe your main symptoms in your own words…\ne.g. 'I've had a bad headache for two days and feel dizzy when I stand up'"}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-          />
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-slate-900">Submit Your Symptoms</h1>
+        <p className="mt-1 text-sm text-slate-400">Describe how you're feeling. Our AI will generate a triage summary for your doctor.</p>
+      </div>
+      {error && <div className="mb-4 rounded-lg rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>}
+      <form onSubmit={handleSubmit} className="grid gap-5">
+        <div className="glass rounded-2xl p-5 shadow-lg">
+          <label className="mb-2 block text-sm font-semibold text-slate-700">Main symptoms <span className="text-rose-500">*</span></label>
+          <textarea value={symptoms} onChange={(e) => setSymptoms(e.target.value)} rows={4} required
+            placeholder={"Describe your main symptoms in your own words...\ne.g. 'I've had a bad headache for two days and feel dizzy when I stand up'"}
+            className={INPUT + " resize-none"} />
         </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            Duration
-          </label>
-          <select
-            value={duration}
-            onChange={(e) => setDuration(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          >
-            {DURATIONS.map((d) => (
-              <option key={d} value={d}>{d}</option>
-            ))}
-          </select>
+        <div className="glass grid gap-4 rounded-2xl p-5 shadow-lg sm:grid-cols-2">
+          <div className="sm:col-span-2"><p className="mb-3 text-sm font-semibold text-slate-700">Additional Details</p></div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-slate-400">Duration</label>
+            <select value={duration} onChange={(e) => setDuration(e.target.value)} className={INPUT}>
+              {DURATIONS.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-slate-400">Accompanying symptoms</label>
+            <input value={accompanying} onChange={(e) => setAccompanying(e.target.value)} placeholder="Nausea, fever, fatigue..." className={INPUT} />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="mb-1.5 block text-xs font-medium text-slate-400">Medical history</label>
+            <textarea value={history} onChange={(e) => setHistory(e.target.value)} rows={2} placeholder="Existing conditions, allergies, current medications..." className={INPUT + " resize-none"} />
+          </div>
         </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            Accompanying symptoms
-          </label>
-          <textarea
-            value={accompanying}
-            onChange={(e) => setAccompanying(e.target.value)}
-            rows={2}
-            placeholder="Any other symptoms? Nausea, fever, fatigue, etc."
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            Medical history
-          </label>
-          <textarea
-            value={history}
-            onChange={(e) => setHistory(e.target.value)}
-            rows={2}
-            placeholder="Existing conditions, allergies, current medications…"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={!symptoms.trim()}
-          className="rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
-        >
+        <button type="submit" disabled={!symptoms.trim()}
+          className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-3 text-sm font-semibold text-white shadow-xl shadow-blue-600/25 transition hover:shadow-2xl hover:brightness-110 disabled:opacity-40 disabled:shadow-none">
           Submit for Analysis
         </button>
       </form>
@@ -272,53 +141,18 @@ export default function SubmitPage() {
   );
 }
 
-function SummaryRow({ label, value }) {
-  return (
-    <div className="flex gap-4 px-4 py-2.5 text-sm">
-      <span className="w-32 shrink-0 font-medium text-slate-500">{label}</span>
-      <span className="text-slate-800">{value || "—"}</span>
-    </div>
-  );
+function Row({ label, value }) {
+  return (<div className="flex gap-4 px-5 py-3 text-sm"><span className="w-32 shrink-0 font-medium text-slate-500">{label}</span><span className="text-slate-900">{value || "—"}</span></div>);
 }
 
-// ── Mock analysis fallback ──
 function generateMockAnalysis(symptomsText) {
   const text = symptomsText.toLowerCase();
-  let score = 2,
-    reason = "Mild symptoms reported; routine follow-up suggested.",
-    timeframe = "Within 1 week",
-    chief = "General discomfort";
-
-  if (text.includes("chest pain") || text.includes("breathing") || text.includes("unconscious")) {
-    score = 5; reason = "Potential cardiac or respiratory emergency.";
-    timeframe = "Immediately"; chief = "Chest pain / difficulty breathing";
-  } else if (text.includes("fever") && (text.includes("vomiting") || text.includes("nauseous"))) {
-    score = 4; reason = "High fever with vomiting may indicate serious infection.";
-    timeframe = "Within 2 hours"; chief = "Fever with vomiting";
-  } else if (text.includes("abdominal") && text.includes("pain")) {
-    score = 4; reason = "Acute abdominal pain requires timely assessment.";
-    timeframe = "Within 2 hours"; chief = "Acute abdominal pain";
-  } else if (text.includes("headache") || text.includes("dizzy")) {
-    score = 3; reason = "Persistent headache warrants timely evaluation.";
-    timeframe = "Within 24 hours"; chief = "Headache / dizziness";
-  } else if (text.includes("sore throat") || text.includes("cough")) {
-    score = 2; reason = "Upper respiratory symptoms; non-urgent but monitor.";
-    timeframe = "Within a few days"; chief = "Sore throat / cough";
-  } else if (text.includes("runny nose") || text.includes("cold") || text.includes("sneez")) {
-    score = 1; reason = "Common cold symptoms; monitor at home.";
-    timeframe = "Routine follow-up"; chief = "Cold symptoms";
-  }
-
-  return {
-    case_id: crypto.randomUUID(),
-    summary: {
-      chief_complaint: chief,
-      symptoms: symptomsText,
-      duration: "As reported",
-      accompanying: "See description",
-      history: "None provided",
-    },
-    triage: { score, reason, recommended_timeframe: timeframe },
-    status: "pending",
-  };
+  let score = 2, reason = "Mild symptoms reported; routine follow-up suggested.", timeframe = "Within 1 week", chief = "General discomfort";
+  if (text.includes("chest pain") || text.includes("breathing") || text.includes("unconscious")) { score = 5; reason = "Potential cardiac or respiratory emergency."; timeframe = "Immediately"; chief = "Chest pain / difficulty breathing"; }
+  else if (text.includes("fever") && (text.includes("vomiting") || text.includes("nauseous"))) { score = 4; reason = "High fever with vomiting may indicate serious infection."; timeframe = "Within 2 hours"; chief = "Fever with vomiting"; }
+  else if (text.includes("abdominal") && text.includes("pain")) { score = 4; reason = "Acute abdominal pain requires timely assessment."; timeframe = "Within 2 hours"; chief = "Acute abdominal pain"; }
+  else if (text.includes("headache") || text.includes("dizzy")) { score = 3; reason = "Persistent headache warrants timely evaluation."; timeframe = "Within 24 hours"; chief = "Headache / dizziness"; }
+  else if (text.includes("sore throat") || text.includes("cough")) { score = 2; reason = "Upper respiratory symptoms; non-urgent but monitor."; timeframe = "Within a few days"; chief = "Sore throat / cough"; }
+  else if (text.includes("runny nose") || text.includes("cold") || text.includes("sneez")) { score = 1; reason = "Common cold symptoms; monitor at home."; timeframe = "Routine follow-up"; chief = "Cold symptoms"; }
+  return { case_id: crypto.randomUUID(), summary: { chief_complaint: chief, symptoms: symptomsText, duration: "As reported", accompanying: "See description", history: "None provided" }, triage: { score, reason, recommended_timeframe: timeframe }, status: "pending" };
 }

@@ -4,99 +4,97 @@ import { useAuth } from "../../lib/auth";
 import { insforge } from "../../lib/insforge";
 
 const SCORE_STYLE = {
-  1: { label: "Routine",    bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200" },
-  2: { label: "Non-urgent", bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200" },
-  3: { label: "Soon",       bg: "bg-amber-50",   text: "text-amber-700",   border: "border-amber-200" },
-  4: { label: "Urgent",     bg: "bg-rose-50",    text: "text-rose-700",    border: "border-rose-200" },
-  5: { label: "Emergency",  bg: "bg-rose-50",    text: "text-rose-800",    border: "border-rose-300" },
+  1: { label: "Routine",    gradient: "from-emerald-400 to-green-500", bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200" },
+  2: { label: "Non-urgent", gradient: "from-emerald-400 to-green-500", bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200" },
+  3: { label: "Soon",       gradient: "from-amber-400 to-orange-500",  bg: "bg-amber-50",   text: "text-amber-700",   border: "border-amber-200" },
+  4: { label: "Urgent",     gradient: "from-rose-400 to-red-500",      bg: "bg-rose-50",    text: "text-rose-700",    border: "border-rose-200" },
+  5: { label: "Emergency",  gradient: "from-red-500 to-red-600",       bg: "bg-rose-50",    text: "text-rose-800",    border: "border-rose-300" },
 };
 
 const STATUS_STYLE = {
-  pending:   "text-amber-600",
-  reviewed:  "text-blue-600",
-  scheduled: "text-emerald-600",
+  pending:   { label: "Pending",   dot: "bg-amber-400",   text: "text-amber-700",   bg: "bg-amber-50" },
+  reviewed:  { label: "Reviewed",  dot: "bg-blue-400",    text: "text-blue-700",    bg: "bg-blue-50" },
+  scheduled: { label: "Scheduled", dot: "bg-emerald-400", text: "text-emerald-700", bg: "bg-emerald-50" },
 };
-
-// ── Demo data so the page is never empty during the presentation ──
-const MOCK_CASES = [
-  {
-    id: "m1",
-    symptoms_raw: "Severe headache for two days, dizziness when standing up, light sensitivity",
-    triage_score: 3,
-    triage_reason: "Persistent headache warrants timely evaluation.",
-    status: "reviewed",
-    created_at: "2026-03-27T09:15:00Z",
-    summary_json: { chief_complaint: "Headache / dizziness" },
-  },
-  {
-    id: "m2",
-    symptoms_raw: "Mild cough and runny nose for three days, no fever, still eating normally",
-    triage_score: 1,
-    triage_reason: "Common cold symptoms; monitor at home.",
-    status: "scheduled",
-    created_at: "2026-03-25T14:30:00Z",
-    summary_json: { chief_complaint: "Cold / cough" },
-  },
-  {
-    id: "m3",
-    symptoms_raw: "Sharp chest pain and trouble breathing after exercise, lasted about 15 minutes",
-    triage_score: 5,
-    triage_reason: "Potential cardiac or respiratory emergency.",
-    status: "reviewed",
-    created_at: "2026-03-20T08:00:00Z",
-    summary_json: { chief_complaint: "Chest pain / difficulty breathing" },
-  },
-];
 
 export default function HistoryPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [cases, setCases] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(null);
 
-  useEffect(() => {
-    loadCases();
-  }, []);
+  useEffect(() => { loadCases(); }, []);
 
   async function loadCases() {
     setLoading(true);
     try {
-      const { data } = await insforge.database
-        .from("cases")
-        .select("*")
-        .eq("patient_id", user?.id)
-        .order("created_at", { ascending: false });
-      setCases(data && data.length > 0 ? data : MOCK_CASES);
+      // Get patient name from user profile
+      const patientName = user?.profile?.name || user?.user_metadata?.name || "";
+
+      if (patientName) {
+        // Find patient records by name, then get their cases
+        const { data: patients } = await insforge.database
+          .from("patients")
+          .select("id")
+          .eq("name", patientName);
+
+        if (patients && patients.length > 0) {
+          const patientIds = patients.map(p => p.id);
+          const { data } = await insforge.database
+            .from("cases")
+            .select("*")
+            .in("patient_id", patientIds)
+            .order("created_at", { ascending: false });
+          setCases(data || []);
+        } else {
+          setCases([]);
+        }
+      } else {
+        // Fallback: try to load all cases (for demo)
+        const { data } = await insforge.database
+          .from("cases")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(20);
+        setCases(data || []);
+      }
     } catch {
-      setCases(MOCK_CASES);
+      setCases([]);
     }
     setLoading(false);
   }
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center text-sm text-slate-400">
-        Loading records...
+      <div className="flex h-64 flex-col items-center justify-center gap-3">
+        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-slate-200 border-t-blue-600" />
+        <p className="text-sm text-slate-400">Loading records...</p>
       </div>
     );
   }
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
-      <h1 className="mb-1 text-2xl font-bold text-slate-900">My Records</h1>
-      <p className="mb-6 text-sm text-slate-500">
-        Your past submissions and triage results
-      </p>
+      <div className="mb-6 flex items-end justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">My Records</h1>
+          <p className="mt-1 text-sm text-slate-500">Your past submissions and triage results</p>
+        </div>
+        <button onClick={loadCases}
+          className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:shadow-sm">
+          Refresh
+        </button>
+      </div>
 
       {cases.length === 0 ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
-          <p className="text-3xl">📋</p>
-          <p className="mt-2 text-sm text-slate-500">
-            No records yet. Submit your symptoms to get started.
-          </p>
+        <div className="glass rounded-2xl p-10 text-center shadow-sm ring-1 ring-slate-200/60">
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-2xl">📋</div>
+          <p className="text-sm font-medium text-slate-600">No records yet</p>
+          <p className="mt-1 text-xs text-slate-400">Submit your symptoms to get started.</p>
           <button
             onClick={() => navigate("/patient/submit")}
-            className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            className="mt-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-200/50 transition hover:shadow-xl hover:brightness-110"
           >
             Submit Symptoms
           </button>
@@ -106,55 +104,52 @@ export default function HistoryPage() {
           {cases.map((c) => {
             const score = c.triage_score || 2;
             const s = SCORE_STYLE[score] || SCORE_STYLE[2];
-            const summary =
-              typeof c.summary_json === "string"
-                ? JSON.parse(c.summary_json)
-                : c.summary_json || {};
+            const st = STATUS_STYLE[c.status] || STATUS_STYLE.pending;
+            const summary = typeof c.summary_json === "string" ? JSON.parse(c.summary_json) : c.summary_json || {};
+            const isOpen = expanded === c.id;
 
             return (
               <div
                 key={c.id}
-                className="rounded-xl border border-slate-200 bg-white p-4 transition hover:shadow-sm"
+                onClick={() => setExpanded(isOpen ? null : c.id)}
+                className="glass cursor-pointer rounded-2xl shadow-sm ring-1 ring-slate-200/60 transition-all hover:shadow-md"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-slate-900">
-                      {summary.chief_complaint || "Case"}
-                    </p>
-                    <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
-                      {c.symptoms_raw?.length > 120
-                        ? c.symptoms_raw.slice(0, 120) + "…"
-                        : c.symptoms_raw}
-                    </p>
+                <div className={`h-1 rounded-t-2xl bg-gradient-to-r ${s.gradient}`} />
+                <div className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-900">
+                        {summary.chief_complaint || "Case"}
+                      </p>
+                      <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
+                        {c.symptoms_raw?.length > 120 ? c.symptoms_raw.slice(0, 120) + "..." : c.symptoms_raw}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      <span className={`flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br ${s.gradient} text-sm font-bold text-white shadow-sm`}>
+                        {score}
+                      </span>
+                      <span className="text-[10px] font-medium text-slate-400">{s.label}</span>
+                    </div>
                   </div>
-                  <span
-                    className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-bold ${s.bg} ${s.text} ${s.border}`}
-                  >
-                    {score}/5 — {s.label}
-                  </span>
-                </div>
 
-                <div className="mt-3 flex items-center justify-between text-[11px]">
-                  <span className="text-slate-400">
-                    {new Date(c.created_at).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                  </span>
-                  <span
-                    className={`font-semibold capitalize ${STATUS_STYLE[c.status] || "text-slate-500"}`}
-                  >
-                    {c.status}
-                  </span>
-                </div>
+                  <div className="mt-3 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-400">
+                      {new Date(c.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </span>
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${st.bg} ${st.text}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />
+                      {st.label}
+                    </span>
+                  </div>
 
-                {/* Triage reason (expandable detail) */}
-                {c.triage_reason && (
-                  <p className="mt-2 border-t border-slate-100 pt-2 text-xs text-slate-400">
-                    {c.triage_reason}
-                  </p>
-                )}
+                  {isOpen && c.triage_reason && (
+                    <div className="mt-3 border-t border-slate-100 pt-3">
+                      <p className="text-xs font-medium text-slate-500">AI Assessment</p>
+                      <p className="mt-1 text-xs leading-relaxed text-slate-600">{c.triage_reason}</p>
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })}

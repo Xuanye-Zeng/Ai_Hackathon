@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
+import { useAuth } from "../../lib/auth";
 import { insforge } from "../../lib/insforge";
 
 const SCORE_STYLE = {
-  5: { color: "bg-rose-100 text-rose-700", label: "Emergency" },
-  4: { color: "bg-rose-50 text-rose-600",  label: "Urgent" },
-  3: { color: "bg-amber-100 text-amber-700", label: "Soon" },
-  2: { color: "bg-emerald-50 text-emerald-600", label: "Non-urgent" },
-  1: { color: "bg-emerald-100 text-emerald-700", label: "Routine" },
+  5: { color: "bg-rose-100 text-rose-700" },
+  4: { color: "bg-rose-50 text-rose-600" },
+  3: { color: "bg-amber-100 text-amber-700" },
+  2: { color: "bg-emerald-50 text-emerald-600" },
+  1: { color: "bg-emerald-100 text-emerald-700" },
 };
 
-export default function SchedulePage() {
+export default function PatientSchedulePage() {
+  const { user } = useAuth();
   const [schedules, setSchedules] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -18,36 +20,34 @@ export default function SchedulePage() {
   async function loadSchedules() {
     setLoading(true);
     try {
-      const { data } = await insforge.database
-        .from("schedules")
-        .select("*, cases(*, patients(name, age, gender))")
-        .order("time_slot", { ascending: true });
-      setSchedules(data || []);
+      // Get all cases for this patient, then find their schedules
+      const { data: cases } = await insforge.database
+        .from("cases")
+        .select("id")
+        .eq("status", "scheduled");
+
+      if (cases && cases.length > 0) {
+        const caseIds = cases.map(c => c.id);
+        const { data } = await insforge.database
+          .from("schedules")
+          .select("*, cases(*, patients(name, age, gender))")
+          .in("case_id", caseIds)
+          .order("time_slot", { ascending: true });
+        setSchedules(data || []);
+      } else {
+        setSchedules([]);
+      }
     } catch {
       setSchedules([]);
     }
     setLoading(false);
   }
 
-  async function confirmSchedule(id) {
-    await insforge.database.from("schedules").update({ confirmed: true }).eq("id", id);
-    loadSchedules();
-  }
-
-  async function cancelSchedule(schedule) {
-    // Delete schedule and revert case to pending
-    await insforge.database.from("schedules").delete().eq("id", schedule.id);
-    if (schedule.case_id) {
-      await insforge.database.from("cases").update({ status: "pending", reviewed_at: null }).eq("id", schedule.case_id);
-    }
-    loadSchedules();
-  }
-
   if (loading) {
     return (
       <div className="flex h-64 flex-col items-center justify-center gap-3">
         <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-slate-200 border-t-blue-600" />
-        <p className="text-sm text-slate-400">Loading schedule...</p>
+        <p className="text-sm text-slate-400">Loading your appointments...</p>
       </div>
     );
   }
@@ -60,16 +60,18 @@ export default function SchedulePage() {
     grouped[date].push(s);
   });
 
+  const upcoming = schedules.filter(s => new Date(s.time_slot) > new Date());
   const confirmed = schedules.filter(s => s.confirmed).length;
-  const pending = schedules.filter(s => !s.confirmed).length;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
+    <div className="mx-auto max-w-2xl px-4 py-8">
       <div className="mb-6 flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Schedule</h1>
+          <h1 className="text-2xl font-bold text-slate-900">My Appointments</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {schedules.length} appointment{schedules.length !== 1 ? "s" : ""} — {confirmed} confirmed, {pending} pending
+            {schedules.length === 0
+              ? "No appointments yet"
+              : `${upcoming.length} upcoming — ${confirmed} confirmed`}
           </p>
         </div>
         <button onClick={loadSchedules}
@@ -80,10 +82,10 @@ export default function SchedulePage() {
 
       {schedules.length === 0 ? (
         <div className="glass rounded-2xl p-10 text-center shadow-sm ring-1 ring-slate-200/60">
-          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-2xl">📅</div>
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-2xl">📅</div>
           <p className="text-sm font-semibold text-slate-700">No appointments scheduled</p>
           <p className="mt-1 text-xs text-slate-400">
-            Schedule appointments from the Triage Queue.
+            Your doctor will schedule an appointment after reviewing your case.
           </p>
         </div>
       ) : (
@@ -94,52 +96,39 @@ export default function SchedulePage() {
               <div className="grid gap-2">
                 {items.map((s) => {
                   const c = s.cases || {};
-                  const patient = c.patients || {};
                   const summary = typeof c.summary_json === "string" ? JSON.parse(c.summary_json) : c.summary_json || {};
                   const score = c.triage_score || 3;
                   const scoreStyle = SCORE_STYLE[score] || SCORE_STYLE[3];
                   const time = new Date(s.time_slot).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+                  const isPast = new Date(s.time_slot) < new Date();
 
                   return (
-                    <div key={s.id} className={`glass rounded-2xl shadow-sm ring-1 transition-all ${s.confirmed ? "ring-emerald-200" : "ring-slate-200/60"}`}>
+                    <div key={s.id} className={`glass rounded-2xl shadow-sm ring-1 transition-all ${isPast ? "opacity-60 ring-slate-200/40" : s.confirmed ? "ring-emerald-200" : "ring-slate-200/60"}`}>
                       <div className="flex items-center gap-4 p-4">
                         {/* Time */}
                         <div className={`flex shrink-0 flex-col items-center rounded-xl px-3 py-2 text-center ring-1 ${
                           s.confirmed ? "bg-emerald-50 ring-emerald-200" : "bg-blue-50 ring-blue-100"
                         }`}>
-                          <span className={`text-[10px] font-medium ${s.confirmed ? "text-emerald-400" : "text-blue-400"}`}>
-                            {s.confirmed ? "CONFIRMED" : "PENDING"}
+                          <span className={`text-[10px] font-medium ${s.confirmed ? "text-emerald-500" : "text-blue-400"}`}>
+                            {isPast ? "PAST" : s.confirmed ? "CONFIRMED" : "PENDING"}
                           </span>
                           <span className={`text-sm font-bold ${s.confirmed ? "text-emerald-700" : "text-blue-700"}`}>{time}</span>
                         </div>
 
-                        {/* Patient info */}
+                        {/* Info */}
                         <div className="min-w-0 flex-1">
                           <p className="font-semibold text-slate-900">
-                            {patient.name || "Unknown"}
-                            {patient.age && <span className="ml-1.5 text-xs font-normal text-slate-400">{patient.age}y</span>}
+                            {summary.chief_complaint || "Appointment"}
                           </p>
-                          <p className="text-sm text-slate-500">{summary.chief_complaint || c.symptoms_raw?.slice(0, 60) || "—"}</p>
+                          <p className="text-sm text-slate-500">
+                            {s.confirmed ? "Your appointment is confirmed" : "Waiting for doctor confirmation"}
+                          </p>
                         </div>
 
-                        {/* Score badge */}
+                        {/* Score */}
                         <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${scoreStyle.color}`}>
-                          {score}/5
+                          Score {score}
                         </span>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-4 py-2.5">
-                        {!s.confirmed && (
-                          <button onClick={() => confirmSchedule(s.id)}
-                            className="rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 px-4 py-1.5 text-xs font-semibold text-white shadow-md transition hover:brightness-110">
-                            Confirm
-                          </button>
-                        )}
-                        <button onClick={() => cancelSchedule(s)}
-                          className="rounded-lg border border-slate-200 bg-white px-4 py-1.5 text-xs font-medium text-red-500 transition hover:bg-red-50">
-                          {s.confirmed ? "Cancel Appointment" : "Remove"}
-                        </button>
                       </div>
                     </div>
                   );

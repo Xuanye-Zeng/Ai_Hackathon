@@ -1,179 +1,100 @@
 # MedTriage Agent
 
-AI-powered medical triage assistant. AI doesn't make diagnoses — it helps doctors save time and reduce oversights.
+AI-powered medical triage assistant that helps doctors prioritize patients by urgency. Patients submit symptoms, AI analyzes and scores severity (1-5), doctors review the triage queue and schedule appointments — all in real time.
 
 **Built at Insforge x Qoder AI Agent Hackathon @ Seattle | 2026.03.29**
 
-## Quick Start
+**Live Demo:** [https://87zbhywa.insforge.site](https://87zbhywa.insforge.site)
 
-### 1. Clone & Install
+## Features
 
-```bash
-git clone https://github.com/Xuanye-Zeng/Ai_Hackathon.git
-cd Ai_Hackathon/frontend
-npm install
-```
+- **AI Symptom Analysis** — Two-step Claude pipeline: structured extraction → severity scoring (1-5)
+- **Patient Q&A** — AI-powered medical Q&A with confidence badges (high/medium/low)
+- **Doctor Triage Queue** — Cases sorted by urgency, expandable AI analysis, one-click review
+- **Appointment Scheduling** — Doctors schedule from triage queue, patients see appointments in real time
+- **Role-based Auth** — Separate patient and doctor experiences with DB-backed role management
 
-### 2. Environment Setup
+## Tech Stack
 
-```bash
-cp .env.example .env
-```
-
-Edit `frontend/.env` and fill in:
-
-```
-VITE_INSFORGE_URL=https://87zbhywa.us-west.insforge.app
-VITE_INSFORGE_ANON_KEY=<ask Xuanye for this>
-```
-
-### 3. Run Frontend
-
-```bash
-cd frontend
-npm run dev
-```
-
-Opens at http://localhost:5173
-
-### 4. InsForge CLI (P1 only)
-
-```bash
-npx @insforge/cli link --project-id 10184899-c9a1-4dca-8c70-cd4e555e9b9b
-```
-
-This gives you access to DB, Auth, and Serverless functions from CLI.
-
----
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 19 + Vite + Tailwind CSS 4 |
+| Backend | InsForge (Auth, Database, Serverless Functions) |
+| AI | Claude Sonnet 4.5 via InsForge AI Gateway |
+| Deployment | InsForge Hosting |
 
 ## Project Structure
 
 ```
 Ai_Hackathon/
-├── db/schema.sql                 # Database schema (run on InsForge)
-├── mock-data/cases.json          # 5 test cases (scores 1-5)
 ├── frontend/
 │   ├── src/
 │   │   ├── lib/
-│   │   │   ├── insforge.js       # InsForge SDK client
-│   │   │   └── auth.jsx          # Auth context (login/signup/roles)
+│   │   │   ├── insforge.js           # InsForge SDK client
+│   │   │   └── auth.jsx              # Auth context + DB-backed roles
 │   │   ├── pages/
-│   │   │   ├── LoginPage.jsx     # Login (shared)
-│   │   │   ├── patient/          # Patient-side pages (P2)
-│   │   │   └── doctor/           # Doctor-side pages (P1 + P3)
-│   │   ├── App.jsx               # Routing + nav bar
-│   │   └── main.jsx              # Entry point
+│   │   │   ├── LoginPage.jsx         # Login / signup with role selection
+│   │   │   ├── patient/
+│   │   │   │   ├── SubmitPage.jsx    # Symptom submission → AI analysis
+│   │   │   │   ├── ChatPage.jsx      # Q&A chat with confidence badges
+│   │   │   │   ├── HistoryPage.jsx   # Past case records
+│   │   │   │   └── SchedulePage.jsx  # Patient appointment view
+│   │   │   └── doctor/
+│   │   │       ├── DashboardPage.jsx # Triage queue + scheduling
+│   │   │       └── SchedulePage.jsx  # Doctor schedule management
+│   │   ├── App.jsx                   # Routing + navigation
+│   │   └── index.css                 # Animated wave gradient background
 │   └── .env.example
-└── HACKATHON_PLAYBOOK.md         # Full team playbook
+├── insforge/functions/
+│   ├── analyzeSymptomsV1/index.ts    # AI symptom analysis pipeline
+│   └── patientQA/index.ts           # AI Q&A with confidence scoring
+├── db/schema.sql                     # Database schema (4 tables)
+└── mock-data/cases.json              # Test cases (scores 1-5)
 ```
-
----
-
-## Team Assignments
-
-### P1 — Xuanye (Backend Core + Integration)
-
-**Files you own:**
-- `db/schema.sql` — DB schema design
-- `frontend/src/pages/doctor/DashboardPage.jsx` — Triage queue dashboard
-- InsForge Serverless: `analyzeSymptomsV1` function
-- Final integration of all three parts
-
-**What to do:**
-1. Create DB tables on InsForge (`npx @insforge/cli db query "$(cat db/schema.sql)"`)
-2. Write `analyzeSymptomsV1` serverless function (symptom -> structured extraction -> severity scoring via chained AI calls)
-3. Build doctor dashboard: pull pending cases from DB, sort by triage score, color-coded cards, click to expand, mark as reviewed
-
-**Don't touch:** Patient-side pages (`patient/*`), schedule page
-
----
-
-### P2 — Patient Q&A (Frontend + AI)
-
-**Files you own:**
-- `frontend/src/pages/patient/SubmitPage.jsx` — Symptom submission form (skeleton ready, wire it up)
-- `frontend/src/pages/patient/ChatPage.jsx` — Q&A chat interface (placeholder, build from scratch)
-- `frontend/src/pages/patient/HistoryPage.jsx` — Past records
-- InsForge Serverless: `patientQA` function
-
-**What to do:**
-1. Wire `SubmitPage.jsx` to call `analyzeSymptomsV1` serverless function on submit
-2. Build `ChatPage.jsx` — chat bubble UI with confidence badges:
-   - `high` = green badge
-   - `medium` = yellow badge
-   - `low` = red badge + "Please consult your doctor"
-3. Create `patientQA` serverless function — AI answers medical questions with confidence scoring
-4. Build `HistoryPage.jsx` — query cases from DB by patient
-
-**Don't touch:** Doctor-side pages (`doctor/*`), DB schema, auth logic
-
-**Key rule:** Every AI response must include `"This is AI-assisted analysis, not medical advice."`
-
----
-
-### P3 — Schedule Management + Demo Prep
-
-**Files you own:**
-- `frontend/src/pages/doctor/SchedulePage.jsx` — Schedule timeline view (placeholder, build from scratch)
-- `mock-data/cases.json` — Mock test data (ready, import into DB)
-- InsForge Serverless: `generateSchedule` function
-- Demo script + pitch
-
-**What to do:**
-1. Import mock data into InsForge DB for testing
-2. Create `generateSchedule` serverless function — deterministic algorithm (NOT AI), sort by triage score, assign 30-min time slots
-3. Build `SchedulePage.jsx` — timeline view, color-coded by triage score, "Confirm All" button
-4. Write 3-minute demo script (see playbook for structure)
-
-**Don't touch:** Patient-side pages (`patient/*`), triage pipeline, auth logic
-
-**Key rule:** Scheduling is deterministic — do NOT use AI for sorting. Simple and reliable.
-
----
 
 ## Routes
 
 | Route | Role | Description |
 |-------|------|-------------|
 | `/login` | All | Login / signup with role selection |
-| `/patient/submit` | Patient | Submit symptoms for triage |
+| `/patient/submit` | Patient | Submit symptoms for AI triage |
 | `/patient/chat` | Patient | Q&A with AI assistant |
 | `/patient/history` | Patient | View past submissions |
+| `/patient/schedule` | Patient | View appointments |
 | `/doctor/dashboard` | Doctor | Triage queue sorted by urgency |
-| `/doctor/schedule` | Doctor | Day's appointment schedule |
+| `/doctor/schedule` | Doctor | Manage appointments |
 
-## InsForge Services
-
-| Service | What For |
-|---------|----------|
-| **Auth** | Two roles: `doctor` and `patient` |
-| **DB** | `patients`, `cases`, `schedules` tables |
-| **Serverless** | `analyzeSymptomsV1`, `patientQA`, `generateSchedule` |
-
-## DB Schema
+## Database Schema
 
 ```sql
-patients:  id, name, age, gender, contact, created_at
-cases:     id, patient_id, symptoms_raw, summary_json, triage_score (1-5),
-           triage_reason, status (pending/reviewed/scheduled), created_at, reviewed_at
-schedules: id, doctor_id, case_id, time_slot, priority, confirmed, created_at
+patients:   id, name, age, gender, contact, created_at
+cases:      id, patient_id, symptoms_raw, summary_json, triage_score (1-5),
+            triage_reason, status (pending/reviewed/scheduled), created_at, reviewed_at
+schedules:  id, doctor_id, case_id, time_slot, priority, confirmed, created_at
+user_roles: email (PK), role (patient/doctor), created_at
 ```
 
-Full schema in `db/schema.sql`.
+## Serverless Functions
 
-## Git Workflow
+| Function | Input | Output |
+|----------|-------|--------|
+| `analyzeSymptomsV1` | symptoms_text, duration, patient_name, etc. | case_id, summary, triage (score, reason, timeframe) |
+| `patientQA` | question, case_id | answer, confidence (high/medium/low), needs_doctor_review |
 
-1. Each person works on their own files — **do not modify files you don't own**
-2. Pull before you push: `git pull origin main`
-3. Commit often with clear messages
-4. If there's a merge conflict, ping in group chat before resolving
+Both functions use **Claude Sonnet 4.5** via InsForge AI Gateway with structured JSON output.
 
-## Sync Checkpoints
+## Quick Start
 
-| Time | What |
-|------|------|
-| 10:30 | DB tables created, Auth working, frontend routes accessible |
-| 12:00 | Lunch — P1 pipeline runs, P2 form submits, P3 has mock data in DB |
-| 14:00 | Full integration — submit symptoms -> triage -> schedule (end to end) |
-| 15:00 | Code freeze. Bug fixes only, no new features |
-| 15:45 | Submit |
+```bash
+git clone https://github.com/Xuanye-Zeng/Ai_Hackathon.git
+cd Ai_Hackathon/frontend
+npm install
+cp .env.example .env   # Fill in InsForge credentials
+npm run dev
+```
+
+## Team
+
+- **Xuanye Zeng** — Backend core, AI pipeline, doctor dashboard, integration
+- **Jason** — Patient Q&A, chat UI, symptom submission
+- **Jay** — Schedule management, demo prep, mock data

@@ -3,16 +3,33 @@ import { insforge } from "./insforge";
 
 const AuthContext = createContext(null);
 
+// Fetch role from user_roles table
+async function fetchRoleFromDB(email) {
+  try {
+    const { data } = await insforge.database
+      .from("user_roles")
+      .select("role")
+      .eq("email", email)
+      .single();
+    return data?.role || null;
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [role, setRole] = useState(null); // "doctor" | "patient"
+  const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    insforge.auth.getCurrentUser().then(({ data }) => {
+    insforge.auth.getCurrentUser().then(async ({ data }) => {
       if (data?.user) {
         setUser(data.user);
-        setRole(data.user.user_metadata?.role || "patient");
+        const email = data.user.email;
+        // Get role from DB (source of truth)
+        const dbRole = await fetchRoleFromDB(email);
+        setRole(dbRole || "patient");
       }
       setLoading(false);
     });
@@ -26,6 +43,15 @@ export function AuthProvider({ children }) {
       metadata: { role: selectedRole },
     });
     if (error) throw error;
+
+    // Save role to DB (source of truth)
+    try {
+      await insforge.database.from("user_roles").insert({ email, role: selectedRole });
+    } catch {
+      // Might already exist if re-registering
+      await insforge.database.from("user_roles").update({ role: selectedRole }).eq("email", email);
+    }
+
     if (data?.user) {
       setUser(data.user);
       setRole(selectedRole);
@@ -39,11 +65,16 @@ export function AuthProvider({ children }) {
       password,
     });
     if (error) throw error;
+
+    // Get role from DB (source of truth)
+    const dbRole = await fetchRoleFromDB(email);
+    const actualRole = dbRole || "patient";
+
     if (data?.user) {
       setUser(data.user);
-      setRole(data.user.user_metadata?.role || "patient");
+      setRole(actualRole);
     }
-    return data;
+    return { ...data, role: actualRole };
   }
 
   async function signOut() {
