@@ -4,7 +4,7 @@ AI-powered medical triage assistant that helps doctors prioritize patients by ur
 
 **Built at Insforge x Qoder AI Agent Hackathon @ Seattle | 2026.03.29**
 
-**Live Demo:** [https://87zbhywa.insforge.site](https://87zbhywa.insforge.site)
+**Live Demo:** [https://drive.google.com/file/d/1QejuyUc5b-PF5eoppEMSlY77PujbS9eZ/view?usp=sharing]
 
 ## Features
 
